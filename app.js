@@ -1,13 +1,12 @@
 const express = require('express');
+const app = express();
 const axios = require('axios');
 const cheerio = require('cheerio');
-
-const app = express();
 
 // CRITICAL FOR PASSENGER: Let the server dynamically assign the port environment variable
 const PORT = process.env.PORT || 3000; 
 
-const SHOP_URL = 'https://whatnot.com';
+const SHOP_URL = 'https://www.whatnot.com/user/hobbyhavenbycmhr/shop';
 
 async function scrapeWhatnotData() {
     const { data } = await axios.get(SHOP_URL, {
