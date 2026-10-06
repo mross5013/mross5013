@@ -1,85 +1,66 @@
-// playwright-crawler.js
-// Run: npm install playwright
-const express = require("express");
-const axios = require("axios");
+const express = require('express');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-const router = express.Router();
+const app = express();
 
-const playwright = require('playwright');
+// CRITICAL FOR PASSENGER: Let the server dynamically assign the port environment variable
+const PORT = process.env.PORT || 3000; 
 
-async function scrapePage(url) {
-    if (!url || typeof url !== 'string') {
-        throw new Error('Invalid URL provided.');
-    }
+const SHOP_URL = 'https://whatnot.com';
 
-    const browser = await playwright.chromium.launch({ headless: true });
-    const page = await browser.newPage();
+async function scrapeWhatnotData() {
+    const { data } = await axios.get(SHOP_URL, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+    });
 
-    try {
-        console.log(`Navigating to: ${url}`);
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const $ = cheerio.load(data);
+    const listings = [];
 
-        // Wait for a specific selector (optional)
-        await page.waitForSelector('body', { timeout: 10000 });
+    // Target product structure (adjust selectors inside browsers via inspect element)
+    $('.product-card-class, [data-testid="product-card"]').each((index, element) => {
+        const title = $(element).find('.product-title-class').text().trim();
+        const price = $(element).find('.product-price-class').text().trim();
+        const imageUrl = $(element).find('img').attr('src');
+        const itemLink = $(element).find('a').attr('href');
 
-        // Extract all links and text
-        const data = await page.evaluate(() => {
-            const links = Array.from(document.querySelectorAll('a'))
-                .map(a => ({ text: a.innerText.trim(), href: a.href }))
-                .filter(l => l.href);
+        if (title) {
+            listings.push({
+                id: index + 1,
+                title,
+                price,
+                imageUrl,
+                url: itemLink ? `https://whatnot.com/${itemLink}` : null
+            });
+        }
+    });
 
-            const paragraphs = Array.from(document.querySelectorAll('p'))
-                .map(p => p.innerText.trim())
-                .filter(Boolean);
-
-            return { links, paragraphs };
-        });
-
-        console.log(`Found ${data.links.length} links and ${data.paragraphs.length} paragraphs.`);
-        return data;
-
-    } catch (err) {
-        console.error(`Error scraping ${url}:`, err.message);
-        return null;
-    } finally {
-        await browser.close();
-    }
+    return listings;
 }
 
-// // Example usage
-// (async () => {
+// Route setup
+app.get('/api/listings', async (req, res) => {
     try {
-        const result = await scrapePage('https://www.whatnot.com/user/hobbyhavenbycmhr/shop');
-        console.log(JSON.stringify(result, null, 2));
-    } catch (err) {
-        console.error('Fatal error:', err.message);
-    }
-// })();
-
-router.get("/JSON/whatnot", async (req, res) => {
-  try {
-    try {
-        const response = await scrapePage('https://www.whatnot.com/user/hobbyhavenbycmhr/shop');
-        console.log(JSON.stringify(result, null, 2));
-        const items = response.data.items.map(item => ({
-            title: item.title,
-            price: item.price,
-            image: item.image,
-            link: item.url
-        }));
+        const productData = await scrapeWhatnotData();
         res.json({
             success: true,
-            items
+            count: productData.length,
+            data: productData
         });
-    } catch (err) {
-        console.error('Fatal error:', err.message);
+    } catch (error) {
+        console.error("Scraping failed:", error.message);
+        res.status(500).json({ success: false, error: "Failed to retrieve store listings." });
     }
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
 });
 
-module.exports = router;
+// Fallback index message for root URL testing
+app.get('/', (req, res) => {
+    res.send('Whatnot Scraper Server is running via Passenger.');
+});
+
+// CRITICAL FOR PASSENGER: Bind to the environment variable 
+app.listen(PORT, () => {
+    console.log(`Server handling traffic on port ${PORT}`);
+});
