@@ -50,7 +50,7 @@ app.get('/api/listings', async (req, res) => {
         });
     } catch (error) {
         console.error("Scraping failed:", error.message);
-        res.status(500).json({ success: false, error: "Failed to retrieve store listings." });
+        res.status(500).json({ success: false, error: "Failed to retrieve store listings. ", message: error.message});
     }
 });
 
